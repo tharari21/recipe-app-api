@@ -1,0 +1,38 @@
+---
+name: Checks # Name as it appears on github actions
+
+on: [push] # trigger - this action will run on push to our project
+
+# Defines a new job called test-lint - this is the job ID. Be descriptive about job ID because this is how to reference it.
+# name is the name as it appears in github actions
+# runs-on specifies the runner we will run our job on. Many diffferent runners available on github actions. We'll be using ubuntu runner. runner is OS we run the job on.
+# Actions has many different runners but for python projects its good to use a basic linux OS like ubuntu.
+# Steps specifies individual steps of the job
+# Name of step is name to give to that step. This is human readable name you'll see on github actions interface
+# uses allows you to use another premade action that is provided in Github Actions repository.
+# Github actions allows you to reuse existing actions
+# Docker has existing actions found under docker/ and this particular action is login-action version 1.
+# with is the parameters we pass to the login action. login action takes specifically username and password and then we pass in variables we defined in github secrets for our project
+# After login we can pass next step that will run once login completes.
+# Checkout is premade step from github that checks out our code meaning it allows us access to our code base because by default we don't have access to the code.
+# This is because some jobs don't require code
+# IN our case we want to run tests and linting on code so we need to make sure code is available by checking out
+# Next we define testing step. The run parameter is command to run. IN our case we want to run django command to run tests inside container.
+# If any of these steps fail, which means they return anything other than x or 0 which is the linux return value for successful exit, then the job running will fail.
+# docker-compose comes pre-installed on ubuntu 20.04.
+jobs:
+  test-lint:
+    name: Test and Lint
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Login to Docker Hub
+        uses: docker/login-action@v1
+        with:
+          username: ${{ secrets.DOCKERHUB_USER }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Test
+        run: docker-compose run --rm app sh c "python manage.py test"
+      - name: Lint
+        run: docker-compose run --rm app sh c "flake8"
