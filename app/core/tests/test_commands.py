@@ -3,7 +3,8 @@ Test custom Django management commands
 """
 
 
-# Mocking behavior of database since we need to simulate database returning a response
+# Mocking behavior of database since 
+# we need to simulate database returning a response
 from unittest.mock import patch
 
 # Potential error we might get when connecting to DB before it's ready
