@@ -14,6 +14,7 @@ router = DefaultRouter()
 # RecipeViewSet enables all methods for CRUD - GET,POST,PUT,PATCH,DELETE
 router.register('recipes', views.RecipeViewSet)
 router.register('tags', views.TagViewSet)
+router.register('ingredients', views.IngredientViewSet)
 
 # name for reverse lookups of urls
 app_name = 'recipe'

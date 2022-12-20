@@ -10,11 +10,14 @@ from rest_framework.permissions import IsAuthenticated
 
 from core.models import (
     Recipe,
-    Tag
+    Tag,
+    Ingredient
 )
 from recipe import serializers
 
 from rest_framework.response import Response
+
+
 
 
 # Create your views here.
@@ -63,6 +66,19 @@ class RecipeViewSet(viewsets.ModelViewSet):
         serializer.save(user=self.request.user)
 
 
+class BaseRecipeAttrViewSet(mixins.DestroyModelMixin,
+                            mixins.UpdateModelMixin,
+                            mixins.ListModelMixin,
+                            viewsets.GenericViewSet
+                            ): # RecipeAttr refers to tags and ingredients
+    """Base viewset for recipe attributes."""
+    authentication_classes = [TokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        """Filter queryset to authenticated user."""
+        return self.queryset.filter(user=self.request.user).order_by('-name')
+
 # ListModelMixin allows you to add listing functionality for listing models
 # GenericViewSet is a viewset that allows you to throw mixins in there so we can have viewset functionality that you desire for API
 
@@ -74,15 +90,16 @@ class RecipeViewSet(viewsets.ModelViewSet):
 
 # https://github.com/encode/django-rest-framework/blob/master/rest_framework/viewsets.py#L239
 
-class TagViewSet(mixins.DestroyModelMixin,
-                mixins.UpdateModelMixin,
-                mixins.ListModelMixin,
-                viewsets.GenericViewSet):
+class TagViewSet(BaseRecipeAttrViewSet):
     """Manage tags in the database."""
     serializer_class = serializers.TagSerializer
     queryset = Tag.objects.all()
-    authentication_classes = [TokenAuthentication]
-    permission_classes = [IsAuthenticated]
 
-    def get_queryset(self):
-        return self.queryset.filter(user=self.request.user).order_by('-name')
+
+class IngredientViewSet(BaseRecipeAttrViewSet):
+    """Manage ingredients in the database"""
+    serializer_class = serializers.IngredientSerializer
+    # Tells view what is accessible to it. We later limit it on a user to user basis
+    queryset = Ingredient.objects.all()
+
+

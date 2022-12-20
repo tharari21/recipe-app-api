@@ -45,3 +45,4 @@ admin.site.register(models.User, UserAdmin)
 # Default options no need to change the look of admin page
 admin.site.register(models.Recipe)
 admin.site.register(models.Tag)
+admin.site.register(models.Ingredient)
