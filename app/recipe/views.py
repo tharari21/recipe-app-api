@@ -74,7 +74,10 @@ class RecipeViewSet(viewsets.ModelViewSet):
 
 # https://github.com/encode/django-rest-framework/blob/master/rest_framework/viewsets.py#L239
 
-class TagViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
+class TagViewSet(mixins.DestroyModelMixin,
+                mixins.UpdateModelMixin,
+                mixins.ListModelMixin,
+                viewsets.GenericViewSet):
     """Manage tags in the database."""
     serializer_class = serializers.TagSerializer
     queryset = Tag.objects.all()
