@@ -51,11 +51,14 @@ class RecipeSerializer(serializers.ModelSerializer):
         """Handle getting or creating ingredients as needed"""
         auth_user = self.context['request'].user
         for ingredient in ingredients:
-            ingredient_obj, created = Ingredient.objects.get_or_create(user=auth_user, **ingredient)
+            ingredient_obj, created = Ingredient.objects.get_or_create(
+                user=auth_user,
+                **ingredient)
             recipe.ingredients.add(ingredient_obj)
 
     def create(self, validated_data):
         """Create a recipe."""
+        print('validated data', validated_data)
         tags = validated_data.pop('tags', []) # Remove tags from validated data. If tags isnt there get an empty list
         ingredients = validated_data.pop('ingredients', [])
 
@@ -98,3 +101,18 @@ class RecipeDetailSerializer(RecipeSerializer):
         fields = RecipeSerializer.Meta.fields + ['description']
 
 
+# Separate serializer for image uploads
+# Needs a separate serializer because when we
+# upload images we only need to accept image field
+# and not the other recipe fields
+# The reason it's a separate API for images is because it's best practice to only upload one type of data to an API
+# So we don't want to upload form data as well as an image
+# We want a specific API just for image uploads
+class RecipeImageSerializer(serializers.ModelSerializer):
+    """Serializer for uploading images to recipes."""
+
+    class Meta:
+        model = Recipe
+        fields = ['id', 'image']
+        read_only_fields = ['id']
+        extra_kwargs = {'image': {'required': 'True'}}

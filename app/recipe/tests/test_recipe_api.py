@@ -2,6 +2,12 @@
 Tests for recipe API.
 """
 from decimal import Decimal
+
+import tempfile
+import os
+
+from PIL import Image
+
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
@@ -24,6 +30,9 @@ def detail_url(recipe_id):
     """Create and return a recipe detail URL."""
     return reverse('recipe:recipe-detail', args=[recipe_id])
 
+def image_upload_url(recipe_id):
+    """Create and return image upload URL."""
+    return reverse('recipe:recipe-upload-image', args=[recipe_id])
 
 # Helper function to create recipe
 def create_recipe(user, **params):
@@ -415,3 +424,62 @@ class PrivateRecipeAPITests(TestCase):
 
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertEqual(recipe.ingredients.count(), 0)
+
+class ImageUploadTests(TestCase):
+    """Tests for the image upload API."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.user = get_user_model().objects.create_user(
+            'user@example.com',
+            'password123'
+        )
+        self.client.force_authenticate(self.user)
+        self.recipe = create_recipe(user=self.user)
+
+    def tearDown(self):
+        # Called when each test is finished
+        # We do this because we don't want to be building test images on our machine everytime we run tests
+        # If we didnt do this, each time we test which will be a lot in development, we will have saved the images.
+        # We want to clean up at the end of testing
+        self.recipe.image.delete()
+
+    def test_upload_image(self):
+        """Test uploading images."""
+        # Get upload image url
+        url = image_upload_url(self.recipe.id)
+        # Create a named temporary file. This file will be created locally and removed after this block ends
+        # image_file is the reference to the file
+        # two image files - first is file user uploads - image user has on machine,
+        # then there will be a new image file which is the stored version of the user's file on the server
+        # We create the user uploaded file using PIL Image object below
+        # The RGB (10,10) creates a 10x10 black square
+
+        with tempfile.NamedTemporaryFile(suffix='.jpg') as image_file:
+            # Creates image in RAM but not saved to a file
+            img = Image.new('RGB', (10,10))
+            # save image to the temporary image file
+            img.save(image_file, format='JPEG')
+            # Seek back to beginning of file because img.save moves the cursor to end of file
+            image_file.seek(0)
+            # Payload to upload to API. Format is multipart because we upload it as a multipart form - best way to upload images using rest_framework.
+            # need a multipartform and this payload simulates a multipart form
+            payload = {'image': image_file}
+            # multipart contains text and binary data (the image)
+            res = self.client.post(url, payload, format='multipart')
+
+        # Refresh recipe so it now has image that we uploaded with API
+        self.recipe.refresh_from_db()
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        # Check that image is in the response
+        self.assertIn('image', res.data)
+        # Check that the file path of the recipe's image exists
+        self.assertTrue(os.path.exists(self.recipe.image.path))
+
+    def test_image_bad_request(self):
+        """Test uploading invalid image."""
+        url = image_upload_url(self.recipe.id)
+        payload = {'image': 'notanimage'}
+        res = self.client.post(url, payload, format='multipart')
+
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)

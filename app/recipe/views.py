@@ -3,8 +3,11 @@ Vies for the recipe API.
 """
 from rest_framework import (
     viewsets,
-    mixins # Mixins can be "mixed in" to a view to add extra functionality
+    mixins, # Mixins can be "mixed in" to a view to add extra functionality
+    status,
 )
+from rest_framework.decorators import action
+from rest_framework.response import Response
 from rest_framework.authentication import TokenAuthentication
 from rest_framework.permissions import IsAuthenticated
 
@@ -51,6 +54,10 @@ class RecipeViewSet(viewsets.ModelViewSet):
         """Return the serializer class for request"""
         if self.action == 'list':
             return serializers.RecipeSerializer
+        # Custom action we will define - actions is how to add additional functionality on top of viewset
+        # ModelViewSet consists of default actions such as list that we see above
+        elif self.action == 'upload_image':
+            return serializers.RecipeImageSerializer
         return self.serializer_class
 
     # Override default create behavior of ModelViewSet
@@ -65,6 +72,20 @@ class RecipeViewSet(viewsets.ModelViewSet):
         # But the user exists in the request
         serializer.save(user=self.request.user)
 
+    # add upload_image action that suppost POST method only.
+    # detail=True makes action apply to detail portion of viewset - detail means it is a specific id of a recipe. The non detail view would be list view which has generic list of all recipes
+    # We want this to apply to a recipe's detailed endpoint so a specific recipe ID must be provided
+    # url_path is the custom url path for our action
+    @action(methods=['POST'], detail=True, url_path='upload-image')
+    def upload_image(self, request, pk=None):
+        """Upload an image to recipe."""
+        recipe = self.get_object()
+        serializer = self.get_serializer(recipe, data=request.data)
+
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class BaseRecipeAttrViewSet(mixins.DestroyModelMixin,
                             mixins.UpdateModelMixin,
