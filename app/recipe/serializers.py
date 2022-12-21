@@ -58,7 +58,6 @@ class RecipeSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         """Create a recipe."""
-        print('validated data', validated_data)
         tags = validated_data.pop('tags', []) # Remove tags from validated data. If tags isnt there get an empty list
         ingredients = validated_data.pop('ingredients', [])
 

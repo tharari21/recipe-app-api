@@ -1,6 +1,12 @@
 """
 Vies for the recipe API.
 """
+from drf_spectacular.utils import (
+    extend_schema_view,
+    extend_schema,
+    OpenApiParameter,
+    OpenApiTypes,
+)
 from rest_framework import (
     viewsets,
     mixins, # Mixins can be "mixed in" to a view to add extra functionality
@@ -21,8 +27,23 @@ from recipe import serializers
 from rest_framework.response import Response
 
 
-
-
+# extend schema for list endpoint to include filters
+@extend_schema_view(
+    list=extend_schema(
+        parameters=[
+            OpenApiParameter(
+                'tags',
+                OpenApiTypes.STR,
+                description='Comma separated list of tag IDs to filter'
+            ),
+            OpenApiParameter(
+                'ingredients',
+                OpenApiTypes.STR,
+                description='Comma separated list of ingredient IDs to filter'
+            ),
+        ]
+    )
+)
 # Create your views here.
 # ModelViewSet is viewset to work with model
 # Good for CRUD
@@ -39,6 +60,10 @@ class RecipeViewSet(viewsets.ModelViewSet):
     # In order to use endpoints for this viewset you neeed to be authenticated
     permission_classes = [IsAuthenticated]
 
+    def _params_to_ints(self, qs):
+        """Convert a list of strings to integers."""
+        return [int(str_id) for str_id in qs.split(',')]
+
     # Out of the box this viewset would allow a user to manage all recipes (get_queryset would just return self.queryset which we defined above as being all recipes)
     # We want to limit them to manage only recipes they created by overwriting get_queryset
     def get_queryset(self):
@@ -47,7 +72,22 @@ class RecipeViewSet(viewsets.ModelViewSet):
         # We know this is defined because we said permission_classes to isauthenticated
         # which means to use this user must be authenticated so self.request.user will always be available.
         # If user is not authenticated a 401 will be thrown
-        return self.queryset.filter(user=self.request.user).order_by('-id')
+        tags = self.request.query_params.get('tags')
+        ingredients = self.request.query_params.get('ingredients')
+        queryset = self.queryset
+
+        if tags:
+            tag_ids = self._params_to_ints(tags)
+            # Filter on nested fields by using this __ notation
+            queryset = queryset.filter(tags__id__in=tag_ids) # Check the id is in the tag_ids list
+        if ingredients:
+            ingredient_ids = self._params_to_ints(ingredients)
+            queryset = queryset.filter(ingredients__id__in=ingredient_ids)
+
+        # distinct() because we can get multiple results if a tag or ingredient is assigned to multiple recipes.
+        return queryset.filter(
+            user=self.request.user
+        ).order_by('-id').distinct()
 
     # Method that gets called when DRF wants to determine the class for a particular action
     def get_serializer_class(self):
@@ -79,14 +119,31 @@ class RecipeViewSet(viewsets.ModelViewSet):
     @action(methods=['POST'], detail=True, url_path='upload-image')
     def upload_image(self, request, pk=None):
         """Upload an image to recipe."""
+        # Get recipe object using the primary key specified for the action i.e. the ID in the url
         recipe = self.get_object()
+        # Indirectly calls get_serializer_class() to get the serializer instance of image. Since the action in this case is upload_image we get the RecipeImageSerializer
         serializer = self.get_serializer(recipe, data=request.data)
 
+        # Check that serializer is valid
         if serializer.is_valid():
+            # save the image to database
             serializer.save()
+            # Return response with the image's data and 200 status code
             return Response(serializer.data, status=status.HTTP_200_OK)
+        # Serializer was not valid so send back errors that serializer returned and 400
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+@extend_schema_view(
+    list=extend_schema(
+        parameters=[
+            OpenApiParameter(
+                'assigned_only',
+                OpenApiTypes.INT, enum=[0,1],
+                description='Filter by items assigned to recipes'
+            )
+        ]
+    )
+)
 class BaseRecipeAttrViewSet(mixins.DestroyModelMixin,
                             mixins.UpdateModelMixin,
                             mixins.ListModelMixin,
@@ -98,7 +155,16 @@ class BaseRecipeAttrViewSet(mixins.DestroyModelMixin,
 
     def get_queryset(self):
         """Filter queryset to authenticated user."""
-        return self.queryset.filter(user=self.request.user).order_by('-name')
+        assigned_only = bool(
+            self.request.query_params.get('assigned_only', 0) # If query param is not set then default to False
+        )
+        queryset = self.queryset
+        if assigned_only:
+            queryset.filter(recipe__isnull=False)
+
+        return queryset.filter(
+            user=self.request.user
+        ).order_by('-name').distinct()
 
 # ListModelMixin allows you to add listing functionality for listing models
 # GenericViewSet is a viewset that allows you to throw mixins in there so we can have viewset functionality that you desire for API
